@@ -5,6 +5,7 @@ Uses https://github.com/Dobot-Arm/TCP-IP-CR-Python-CMD
 
 import threading
 import numpy as np
+import ipdb
 from time import sleep
 
 from cri.dobot.cr.dobot_api import DobotApiDashboard, DobotApi, DobotApiMove, MyType
@@ -55,7 +56,7 @@ class CRClient:
         """
         self._dashboard = DobotApiDashboard(ip, 29999)
         self._move = DobotApiMove(ip, 30003)
-        self._feed = DobotApi(ip, 30005)
+        self._feed = DobotApi(ip, 30004)
 
         self._dashboard.ClearError()
         self._dashboard.EnableRobot()
@@ -112,7 +113,11 @@ class CRClient:
         """Gets time delay for servo move commands. 
         """
         return self._servo_delay
+    def InverseK(self, pose):
 
+
+
+        return self._dashboard.InverseSolution(*pose, 0, 0)
     def move_joints(self, joint_angles):
         """Executes an immediate move to the specified joint angles.
 
@@ -122,12 +127,12 @@ class CRClient:
         """       
         joint_angles = np.array(joint_angles, dtype=np.float32).ravel()
         joint_angles *= self._scale_angle 
-        if self._servo_mode:
-            self._move.ServoJ(*joint_angles)
-            sleep(self._servo_delay)
-        else:
-            self._move.JointMovJ(*joint_angles)
-            self._move.Sync()
+        # if self._servo_mode:
+        #     self._move.ServoJ(*joint_angles)
+        #     sleep(self._servo_delay)
+        # else:
+        self._move.JointMovJ(*joint_angles)
+        self._move.Sync()
 
     def move_linear(self, pose):
         """Executes a linear/cartesian move from the current base frame pose to
@@ -140,13 +145,21 @@ class CRClient:
         pose = quat2euler(pose, 'sxyz')
         pose[:3] *= self._scale_linear
         pose[3:] *= self._scale_angle
-        if self._servo_mode:
-            self._move.ServoP(*pose)
-            sleep(self._servo_delay)
-        else:    
-            self._move.MovL(*pose)
-            self._move.Sync()
+        # if self._servo_mode:
+        #     self._move.ServoP(*pose)
+        #     sleep(self._servo_delay)
+        # else:
 
+        self._move.ServoP(*pose)
+        self._move.Sync()
+    def servo_move_linear(self, pose):
+
+        pose = np.array(pose, dtype=np.float32).ravel()
+        pose = quat2euler(pose, 'sxyz')
+        pose[:3] *= self._scale_linear
+        pose[3:] *= self._scale_angle
+        self._move.ServoP(*pose)
+        # self._move.Sync()
     def set_linear_speed(self, linear_speed):
         """Sets the linear speed (% of maximum)
         """
@@ -166,7 +179,7 @@ class CRClient:
     def set_speed(self, speed):
         """Sets the angular speed (% of maximum)
         """
-        if speed < 1 or speed > 100: 
+        if speed < 1 or speed > 100:
             raise Exception("Speed value outside range of 1-100%")
         self._dashboard.SpeedFactor(round(speed))
         self._move.Sync()
@@ -174,7 +187,8 @@ class CRClient:
     def get_speed(self):
         """Gets the speed (% of maximum)
         """
-        return feedback["speed_scaling"] 
+        speed = self._dashboard.TCPSpeedEnd()
+        return speed
     
     def get_joint_angles(self):
         """returns the robot joint angles.
@@ -183,7 +197,10 @@ class CRClient:
         j0, j1, j2, rx, ry, rz are numbered from base to end effector and are
         measured in degrees (default)
         """
-        return feedback["q_actual"] / self._scale_angle
+        angel = self._dashboard.GetAngle()
+        numbers_str = angel.split("{")[1].split("}")[0]
+        angel = np.array([float(x) for x in numbers_str.split(",")])
+        return angel
 
     def get_pose(self):
         """retvalsurns the TCP pose in the reference coordinate frame.
@@ -192,11 +209,15 @@ class CRClient:
         x, y, z specify a Euclidean position (default mm)
         rz rotation of end effector
         """
-        pose_actual = feedback["tool_vector_actual"]
-        pose = np.array(pose_actual, dtype=np.float32)
+        # pose_actual = feedback["tool_vector_actual"]
+        pose = self._dashboard.GetPose()
+        numbers_str = pose.split("{")[1].split("}")[0]
+        pose = np.array([float(x) for x in numbers_str.split(",")])
+        # pose = np.array(pose_actual, dtype=np.float32)
         pose[:3] /= self._scale_linear        
         pose[3:] /= self._scale_angle        
         pose = euler2quat(pose, 'sxyz')
+
         return pose
 
     def move_circular(self, via_pose, end_pose):

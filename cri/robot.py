@@ -377,6 +377,7 @@ class SyncRobot(Robot):
     def coord_frame(self, frame):
         """Sets the reference coordinate frame for the robot TCP.
         """
+
         check_pose(frame)
         self._coord_frame_q = euler2quat(frame, self._axes)
 
@@ -408,6 +409,7 @@ class SyncRobot(Robot):
     def speed(self):
         """Returns the speed of the robot TCP.
         """
+
         return self.controller.speed
     
     @speed.setter
@@ -447,6 +449,7 @@ class SyncRobot(Robot):
         base_pose_q = self.controller.pose
         pose_q = transform(base_pose_q, self._coord_frame_q)
         frame_q = frame(pose_q, self._tcp_q)
+
         return quat2euler(frame_q, self._axes)
     
     @property

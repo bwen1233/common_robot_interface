@@ -4,7 +4,7 @@ interface to various robot arms.
 
 import warnings
 import numpy as np
-
+import ipdb
 from cri.dobot.cr_client import CRClient
 from cri.controller import RobotController
 
@@ -109,6 +109,7 @@ class CRController(RobotController):
     def speed(self):
         """Returns the speed of the robot TCP (% of max).
         """
+
         return self._client.get_speed()
 
     @speed.setter
@@ -181,6 +182,11 @@ class CRController(RobotController):
             warnings.warn("elbow property not implemented in Dobot CR Controller")
         self._commanded_pose = pose
         self._client.move_linear(pose)
+    def servo_move_linear(self, pose, elbow=None):
+        if elbow is not None:
+            warnings.warn("elbow property not implemented in Dobot CR Controller")
+        self._commanded_pose = pose
+        self._client.servo_move_linear(pose)
 
     def move_circular(self, via_pose, end_pose, elbow=None):
         """Executes a movement in a circular path from the current base frame

@@ -3,6 +3,8 @@ Ethernet TCP/IPv4: 192.168.5.10, ip: 192.168.5.1
 """
 
 import time
+
+import ipdb
 import numpy as np
 
 from cri.robot import SyncRobot
@@ -13,20 +15,20 @@ np.set_printoptions(precision=2, suppress=True)
 
 def main():
     base_frame = (0, 0, 0, 0, 0, 0)            # x->left, y->back, z->up, rz->anticlockwise
-    work_frame = (0, -350, 200, -180, 0, 0)   # x->left, y->back, z->up, rz->anticlockwise
+    work_frame = (-400, 23, 281, 180, 0, 0)   # x->left, y->back, z->up, rz->anticlockwise
 
-    with SyncRobot(Controller()) as robot:
+    with SyncRobot(Controller(ip='192.168.5.1')) as robot:
 
         # Set TCP and coordinate frame
         robot.coord_frame = work_frame
-        robot.tcp = (0, 0, -100, 0, 0, 0)
-        robot.speed = 50
+        robot.tcp = (0, 0, -80, 0, 0, 45)
+        robot.speed = 10
 
         # zero last joint
-        robot.move_joints([*robot.joint_angles[:-1], 0])
-        
+
         # Display robot info
         print("speed: ", robot.speed) # delayed until next run
+
         print("Robot info: {}".format(robot.info))
 
         # Display initial joint angles and inital pose in work frame
@@ -35,7 +37,23 @@ def main():
 
         # Move to origin of work frame
         print("Moving to origin of work frame ...")
+        # robot.move_joints([*robot.joint_angles[:-1], 0])
         robot.move_linear((0, 0, 0, 0, 0, 0))
+        robot.move_linear((0, 0, 0, 0, 0, 0))
+        robot.move_linear((0, 0, 0, 0, 0, 0))
+
+        # robot.move_linear((0, 40, 0, 0, 0, 0))
+        #
+        # robot.move_linear((0, 40, 0, 20, 0, 0))
+        # robot.move_linear((0, 40, 0, -20, 0, 0))
+        # robot.move_linear((0, 40, 0, 0, 0, 0))
+
+
+        print(robot.pose)
+        ipdb.set_trace()
+
+
+
         print("Target origin pose in work frame: {}".format(robot.target_pose))
         print("Origin pose in work frame: {}".format(robot.pose))
         
