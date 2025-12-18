@@ -4,7 +4,7 @@
 import queue
 from abc import ABC, abstractmethod
 from threading import Thread
-
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_EXCEPTION
 import ipdb
 import numpy as np
 
@@ -300,6 +300,28 @@ class Robot(ABC):
         """Releases any resources held by the robot (e.g., sockets).
         """
         pass
+
+class SyncGripper:
+    def __init__(self, gripper):
+        self.gripper = gripper
+
+    @property
+    def speed(self):
+        return getattr(self.gripper, "speed", 0)
+
+    @speed.setter
+    def speed(self, speed):
+        self.gripper.set_speed(speed)
+
+    def move_to(self, position, speed=None, acc=None, torque=None, wait=True):
+        self.gripper.move_to(position, speed=speed, acc=acc, torque=torque, wait=wait)
+
+    @property
+    def pose(self):
+        return self.gripper.read_position()
+
+    def close(self):
+        self.gripper.close()
 
 
 class SyncRobot(Robot):
@@ -715,3 +737,61 @@ class AsyncRobot(Robot):
         """Releases any resources held by the robot (e.g., sockets).
         """
         self.sync_robot.close()
+
+
+class ThreadActor:
+    __slots__ = ("_obj", "_exec")
+
+    def __init__(self, obj, executor: ThreadPoolExecutor):
+        object.__setattr__(self, "_obj", obj)
+        object.__setattr__(self, "_exec", executor)
+
+    def __getattr__(self, name):
+        attr = getattr(self._obj, name)
+        if callable(attr):
+            def _submit(*args, **kwargs):
+                return self._exec.submit(attr, *args, **kwargs)
+            return _submit
+        return attr
+
+    def __setattr__(self, name, value):
+
+        if name in ("_obj", "_exec"):
+            object.__setattr__(self, name, value)
+            return
+
+        setattr(self._obj, name, value)
+
+    def __delattr__(self, name):
+        if name in ("_obj", "_exec"):
+            raise AttributeError(f"Cannot delete internal attribute {name}")
+        delattr(self._obj, name)
+
+class SyncRobotGripperWrapper:
+    def __init__(self, controller, gripper_device):
+        robot_obj = controller
+        grip_obj  = gripper_device
+
+        self._robot_exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="robot")
+        self._grip_exec  = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gripper")
+
+
+        self.robot = ThreadActor(robot_obj, self._robot_exec)
+        self.gripper = ThreadActor(grip_obj, self._grip_exec)
+
+        self._robot_obj = robot_obj
+        self._gripper_device = gripper_device
+
+    def close(self):
+        self._robot_exec.shutdown(wait=True, cancel_futures=False)
+        self._grip_exec.shutdown(wait=True, cancel_futures=False)
+        try:
+            self._robot_obj.close()
+        finally:
+            if hasattr(self._gripper_device, "close"):
+                self._gripper_device.close()
+
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False

@@ -4,6 +4,7 @@
 
 import time
 
+import ipdb
 import numpy as np
 
 from cri.robot import SyncRobot, AsyncRobot
@@ -17,7 +18,7 @@ def main():
     work_frame = (109.1, -487.0, 341.3, 180, 0, -90)   # base frame: x->right, y->back, z->up
 #     work_frame = (487.0, -109.1, 341.3, 180, 0, 180)    # base frame: x->front, y->right, z->up
     
-    with AsyncRobot(SyncRobot(RTDEController(ip='192.11.72.10'))) as robot:
+    with AsyncRobot(SyncRobot(RTDEController(ip='192.168.1.141'))) as robot:
     # For testing in URSim simulator
 #    with AsyncRobot(SyncRobot(RTDEController(ip='127.0.0.1'))) as robot:
         # Set TCP, linear speed,  angular speed and coordinate frame
@@ -25,7 +26,7 @@ def main():
         robot.linear_speed = 100
         robot.angular_speed = 10
         robot.coord_frame = work_frame
-
+        ipdb.set_trace()
         # Display robot info
         print("Robot info: {}".format(robot.info))
 

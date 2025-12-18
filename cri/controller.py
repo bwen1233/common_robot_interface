@@ -216,3 +216,10 @@ Controller = {
     'sim': SimController,
     'franka': PyfrankaController
 }
+
+
+from cri.gripper.Feetech_servo.Feetech_controller import FeetechServoController
+
+Gripper = {
+    'Feetech': FeetechServoController,
+}
