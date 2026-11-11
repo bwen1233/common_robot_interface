@@ -21,8 +21,11 @@ class MG400Client:
     class InvalidZone(ValueError):
         pass
 
-    def __init__(self, ip="192.168.1.6"):
-        self.set_units('millimeters', 'degrees')     
+    def __init__(self, ip="192.168.1.6", feed_port=30004):
+        self.set_units('millimeters', 'degrees')
+        self._servo_mode = False
+        self._servo_delay = 0.0
+        self._feed_port = feed_port
         self.connect(ip)
 
     def __repr__(self):
@@ -55,7 +58,8 @@ class MG400Client:
         """
         self._dashboard = DobotApiDashboard(ip, 29999)
         self._move = DobotApiMove(ip, 30003)
-        self._feed = DobotApi(ip, 30005)
+        # feedback port: 30004 pushes every 8 ms (real-time), 30005 every 200 ms
+        self._feed = DobotApi(ip, self._feed_port)
 
         self._dashboard.ClearError()
         self._dashboard.EnableRobot()
@@ -83,13 +87,35 @@ class MG400Client:
 
                 # Refresh Properties
                 feedback = a[0]
-
-            sleep(0.1)
+            # no sleep: recv() blocks until the next packet, and sleeping would let
+            # packets queue up so the readings fall behind the robot
 
     def get_info(self):
         """Returns a unique robot identifier string.
         """
         pass
+
+    def set_servo_mode(self, servo_mode):
+        """Sets whether move_joints uses ServoJ (streaming) instead of JointMovJ.
+        """
+        if type(servo_mode) is not bool:
+            raise Exception("Servo mode must be [True, False]")
+        self._servo_mode = servo_mode
+
+    def get_servo_mode(self):
+        """Returns whether move_joints uses ServoJ.
+        """
+        return self._servo_mode
+
+    def set_servo_delay(self, servo_delay):
+        """Sets the time to sleep after each ServoJ command (s).
+        """
+        self._servo_delay = servo_delay
+
+    def get_servo_delay(self):
+        """Gets the time to sleep after each ServoJ command (s).
+        """
+        return self._servo_delay
 
     def move_joints(self, joint_angles):
         """Executes an immediate move to the specified joint angles.
@@ -97,11 +123,26 @@ class MG400Client:
         joint_angles = (j0, j1, j2, rz)
         j0, j1, j2, rz are numbered from base to end effector and are
         measured in degrees (default)
-        """       
+        """
+        if self._servo_mode:
+            self.servo_joints(joint_angles)
+            return
         joint_angles = np.array(joint_angles, dtype=np.float32).ravel()
-        joint_angles *= self._scale_angle 
+        joint_angles *= self._scale_angle
         self._move.JointMovJ(*joint_angles)
         self._move.Sync()
+
+    def servo_joints(self, joint_angles):
+        """Streams a joint target with ServoJ; returns without waiting for the motion.
+
+        joint_angles = (j0, j1, j2, rz), degrees (default). Send targets close to
+        the current pose at a steady rate (e.g. teleoperation).
+        """
+        joint_angles = np.array(joint_angles, dtype=np.float32).ravel()[:4]
+        joint_angles *= self._scale_angle
+        self._move.ServoJ(*joint_angles)
+        if self._servo_delay > 0:
+            sleep(self._servo_delay)
 
     def move_linear(self, pose):
         """Executes a linear/cartesian move from the current base frame pose to

@@ -16,12 +16,14 @@ class MG400Controller(RobotController):
     coordinate transformations.
     """
 
-    def __init__(self, ip="192.168.1.6"):
+    def __init__(self, ip="192.168.1.6", feed_port=30004):
         self._ip = ip
-        self._client = MG400Client(ip)
+        self._client = MG400Client(ip, feed_port=feed_port)
         try:
             # self.tcp = (0, 0, 0, 1, 0, 0, 0)     # base frame (quaternion)
             self.linear_speed = 10               # mm/s
+            self.servo_mode = False
+            self.servo_delay = 0.0
 
             self._commanded_joint_angles = None
             self._commanded_pose = None
@@ -37,6 +39,30 @@ class MG400Controller(RobotController):
                 self._ip,
                 self._client.get_info(),
                 )
+
+    @property
+    def servo_mode(self):
+        """Returns whether move_joints uses ServoJ (streaming).
+        """
+        return self._client.get_servo_mode()
+
+    @servo_mode.setter
+    def servo_mode(self, mode):
+        """Sets whether move_joints uses ServoJ (streaming).
+        """
+        self._client.set_servo_mode(mode)
+
+    @property
+    def servo_delay(self):
+        """Returns the sleep after each ServoJ command (s).
+        """
+        return self._client.get_servo_delay()
+
+    @servo_delay.setter
+    def servo_delay(self, delay):
+        """Sets the sleep after each ServoJ command (s).
+        """
+        self._client.set_servo_delay(delay)
 
     @property
     def tcp(self):
@@ -147,6 +173,12 @@ class MG400Controller(RobotController):
         """
         self._commanded_joint_angles = joint_angles
         self._client.move_joints(joint_angles)
+
+    def servo_joints(self, joint_angles):
+        """Non-blocking joint streaming (ServoJ), degrees; for teleoperation.
+        """
+        self._commanded_joint_angles = joint_angles
+        self._client.servo_joints(joint_angles)
 
     def move_linear(self, pose, elbow=None):
         """Executes linear/Cartesian move from base frame pose to specified pose.

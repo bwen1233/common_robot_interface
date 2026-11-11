@@ -552,13 +552,13 @@ class DobotApiMove(DobotApi):
         self.send_data(string)
         return self.wait_reply()
 
-    def ServoJ(self, j1, j2, j3, j4, j5, j6):
+    def ServoJ(self, *joints):
         """
-        Dynamic follow command based on joint space
-        j1~j6:Point position values on each joint
+        Dynamic follow command based on joint space (returns on acknowledgement,
+        does not wait for the motion to finish).
+        joints: one value per joint, e.g. j1~j4 on the MG400
         """
-        string = "ServoJ({:f},{:f},{:f},{:f},{:f},{:f})".format(
-            j1, j2, j3, j4, j5, j6)
+        string = "ServoJ({})".format(",".join("{:f}".format(j) for j in joints))
         self.send_data(string)
         return self.wait_reply()
 
