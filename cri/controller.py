@@ -219,7 +219,9 @@ Controller = {
 
 
 from cri.gripper.Feetech_servo.Feetech_controller import FeetechServoController
+from cri.gripper.Hiwonder_LSC.LSC_controller import HiwonderLSCController
 
 Gripper = {
     'Feetech': FeetechServoController,
+    'Hiwonder_LSC': HiwonderLSCController,
 }
