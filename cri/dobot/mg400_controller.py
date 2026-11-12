@@ -16,14 +16,23 @@ class MG400Controller(RobotController):
     coordinate transformations.
     """
 
-    def __init__(self, ip="192.168.1.6", feed_port=30004):
+    def __init__(self, ip="192.168.1.6", feed_port=30004, speed_factor=None,
+                 servo_speed=100, servo_acc=100, servo_cp=100,
+                 servo_period=0.05, servo_max_lag=10.0):
+        """speed_factor: global SpeedFactor (1-100 %) set on connect; None leaves it as is.
+        It scales every motion, including servo_joints segments.
+        """
         self._ip = ip
-        self._client = MG400Client(ip, feed_port=feed_port)
+        self._client = MG400Client(ip, feed_port=feed_port, servo_speed=servo_speed,
+                                   servo_acc=servo_acc, servo_cp=servo_cp,
+                                   servo_period=servo_period, servo_max_lag=servo_max_lag)
         try:
             # self.tcp = (0, 0, 0, 1, 0, 0, 0)     # base frame (quaternion)
             self.linear_speed = 10               # mm/s
             self.servo_mode = False
             self.servo_delay = 0.0
+            if speed_factor is not None:
+                self.speed = speed_factor
 
             self._commanded_joint_angles = None
             self._commanded_pose = None
@@ -175,7 +184,7 @@ class MG400Controller(RobotController):
         self._client.move_joints(joint_angles)
 
     def servo_joints(self, joint_angles):
-        """Non-blocking joint streaming (ServoJ), degrees; for teleoperation.
+        """Non-blocking joint streaming (JointMovJ + CP, no Sync), degrees; for teleoperation.
         """
         self._commanded_joint_angles = joint_angles
         self._client.servo_joints(joint_angles)

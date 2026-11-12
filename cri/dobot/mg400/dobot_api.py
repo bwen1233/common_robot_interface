@@ -436,13 +436,18 @@ class DobotApiMove(DobotApi):
         self.send_data(string)
         return self.wait_reply()
 
-    def JointMovJ(self, j1, j2, j3, j4):
+    def JointMovJ(self, j1, j2, j3, j4, *dynParams):
         """
         Joint motion interface (linear motion mode)
-        j1~j6:Point position values on each joint
+        j1~j4: Point position values on each joint
+        *dynParams: optional parameters, appended as given, e.g. "SpeedJ=50", "AccJ=50", "CP=50"
+                    (same as Dobot-Arm/TCP-IP-4Axis-Python)
         """
-        string = "JointMovJ({:f},{:f},{:f},{:f})".format(
+        string = "JointMovJ({:f},{:f},{:f},{:f}".format(
             j1, j2, j3, j4)
+        for params in dynParams:
+            string = string + "," + str(params)
+        string = string + ")"
         self.send_data(string)
         return self.wait_reply()
 
@@ -552,13 +557,13 @@ class DobotApiMove(DobotApi):
         self.send_data(string)
         return self.wait_reply()
 
-    def ServoJ(self, *joints):
+    def ServoJ(self, j1, j2, j3, j4, j5, j6):
         """
-        Dynamic follow command based on joint space (returns on acknowledgement,
-        does not wait for the motion to finish).
-        joints: one value per joint, e.g. j1~j4 on the MG400
+        Dynamic follow command based on joint space
+        j1~j6:Point position values on each joint
         """
-        string = "ServoJ({})".format(",".join("{:f}".format(j) for j in joints))
+        string = "ServoJ({:f},{:f},{:f},{:f},{:f},{:f})".format(
+            j1, j2, j3, j4, j5, j6)
         self.send_data(string)
         return self.wait_reply()
 

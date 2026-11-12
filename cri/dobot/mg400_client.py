@@ -1,14 +1,17 @@
 """Python client interface for Dobot MG400 using sockets
 Firmware version 1.5.7.0
-Uses https://github.com/Dobot-Arm/TCP-IP-4Axis-Python-CMD
+Uses https://github.com/Dobot-Arm/TCP-IP-4Axis-Python-CMD (now Dobot-Arm/TCP-IP-4Axis-Python).
+That 4-axis API has no ServoJ, so servo_joints streams JointMovJ (+ SpeedJ/AccJ/CP) instead.
 """
 
 import threading
 import numpy as np
-from time import sleep
+from time import sleep, monotonic
 
 from cri.dobot.mg400.dobot_api import DobotApiDashboard, DobotApi, DobotApiMove, MyType
 from cri.transforms import euler2quat, quat2euler
+
+feedback = None  # latest real-time feedback packet, set by MG400Client.get_feed
 
 
 class MG400Client:
@@ -21,11 +24,26 @@ class MG400Client:
     class InvalidZone(ValueError):
         pass
 
-    def __init__(self, ip="192.168.1.6", feed_port=30004):
+    def __init__(self, ip="192.168.1.6", feed_port=30004,
+                 servo_speed=100, servo_acc=100, servo_cp=100,
+                 servo_period=0.05, servo_max_lag=10.0):
+        """Settings for servo_joints (JointMovJ streaming):
+        servo_speed / servo_acc / servo_cp: SpeedJ / AccJ / CP (1-100 %) of each segment;
+            these are scaled by the global SpeedFactor.
+        servo_period: minimum time between segments (s); short segments sent at a steady
+            rate overlap in the queue, so CP can blend them.
+        servo_max_lag: stop adding segments while the arm is more than this many degrees
+            behind the last target, so the queue cannot grow.
+        """
         self.set_units('millimeters', 'degrees')
         self._servo_mode = False
         self._servo_delay = 0.0
         self._feed_port = feed_port
+        self._servo_params = (f"SpeedJ={int(servo_speed)}", f"AccJ={int(servo_acc)}", f"CP={int(servo_cp)}")
+        self._servo_period = servo_period
+        self._servo_max_lag = servo_max_lag
+        self._last_servo_target = None
+        self._last_servo_time = None
         self.connect(ip)
 
     def __repr__(self):
@@ -133,14 +151,30 @@ class MG400Client:
         self._move.Sync()
 
     def servo_joints(self, joint_angles):
-        """Streams a joint target with ServoJ; returns without waiting for the motion.
+        """Streams a joint target; returns without waiting for the motion.
 
         joint_angles = (j0, j1, j2, rz), degrees (default). Send targets close to
         the current pose at a steady rate (e.g. teleoperation).
+
+        The MG400 TCP/IP API has no ServoJ (the controller answers -1), so this sends
+        JointMovJ(..., SpeedJ, AccJ, CP) without Sync(). Calls closer together than
+        servo_period are dropped (the next one carries the newer target), and so are calls
+        while the arm lags the last target by more than servo_max_lag.
         """
         joint_angles = np.array(joint_angles, dtype=np.float32).ravel()[:4]
         joint_angles *= self._scale_angle
-        self._move.ServoJ(*joint_angles)
+        now = monotonic()
+        if self._last_servo_time is not None and now - self._last_servo_time < self._servo_period:
+            return
+        last = self._last_servo_target
+        if last is not None and feedback is not None:
+            if np.max(np.abs(feedback["q_actual"][:4] - last)) > self._servo_max_lag:
+                return
+        reply = self._move.JointMovJ(*joint_angles, *self._servo_params)
+        if not reply.startswith("0,"):
+            raise self.CommandFailed(f"JointMovJ rejected by controller: {reply.strip()}")
+        self._last_servo_target = joint_angles.copy()
+        self._last_servo_time = now
         if self._servo_delay > 0:
             sleep(self._servo_delay)
 
